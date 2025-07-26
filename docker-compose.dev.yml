@@ -1,0 +1,15 @@
+services:
+  energy-provider-adapter:
+    container_name: energy-provider-adapter
+    build:
+      context: .
+      dockerfile: Dockerfile
+    labels:
+      - family=energy-provider-adapter
+    networks:
+      - sharedApiNetwork
+
+networks:
+  sharedApiNetwork:
+    external: true
+    
