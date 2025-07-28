@@ -3,11 +3,17 @@ services:
     container_name: energy-provider-adapter
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     labels:
       - family=energy-provider-adapter
+    volumes:
+      - .:/app
+      - air-cache:/app/tmp
     networks:
       - sharedApiNetwork
+
+volumes:
+  air-cache:
 
 networks:
   sharedApiNetwork:
