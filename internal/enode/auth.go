@@ -1,6 +1,7 @@
 package enode
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 )
 
 type enodeOAuthResponse struct {
@@ -20,30 +21,58 @@ type enodeOAuthResponse struct {
 	Scope       string `json:"scope" validate:"required"`
 }
 
-type enodeAuthClient struct {
+type EnodeAuthClient struct {
 	clientID     string
 	clientSecret string
 	baseURL      string
 	oauthBaseURL string
+	redisClient  *redis.Client
 }
 
-func NewEnodeAuthClient(clientID, clientSecret, oauthBaseURL, baseURL string) *enodeAuthClient {
-	return &enodeAuthClient{
+func NewEnodeAuthClient(clientID, clientSecret, oauthBaseURL, baseURL string, redisClient *redis.Client) *EnodeAuthClient {
+	return &EnodeAuthClient{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		oauthBaseURL: oauthBaseURL,
 		baseURL:      baseURL,
+		redisClient:  redisClient,
 	}
 }
 
-func (client *enodeAuthClient) Authenticate(c echo.Context) (*enodeOAuthResponse, error) {
+const (
+	enodeAccessTokenKey = "enode_access_token"
+)
+
+func (client *EnodeAuthClient) GetAccessToken() (string, error) {
+	token, err := client.redisClient.Get(context.Background(), enodeAccessTokenKey).Result()
+	if err != redis.Nil {
+		slog.Debug("Access token found in Redis")
+		return token, nil
+	}
+	if err != nil {
+		slog.Error("Failed to get access token from Redis", "error", err)
+		return "", err
+	}
+
+	slog.Debug("Access token not found in Redis, authenticating with Enode")
+	tokenInfo, err := client.authenticate()
+	if err != nil {
+		slog.Error("Failed to authenticate with Enode", "error", err)
+		return "", err
+	}
+
+	if err := client.saveAccessToken(tokenInfo, enodeAccessTokenKey); err != nil {
+		slog.Error("Failed to save access token", "error", err)
+		return "", err
+	}
+	return tokenInfo.AccessToken, nil
+}
+
+func (client *EnodeAuthClient) authenticate() (*enodeOAuthResponse, error) {
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 
 	url := fmt.Sprintf("%s/oauth2/token", client.oauthBaseURL)
-
-	slog.Info("Making authentication request", "url", url, "client_id", client.clientID,
-		"request_data", form.Encode())
 
 	// Make request
 	req, err := http.NewRequest("POST", url, strings.NewReader(form.Encode()))
@@ -79,4 +108,15 @@ func (client *enodeAuthClient) Authenticate(c echo.Context) (*enodeOAuthResponse
 	}
 
 	return &tokenInfo, nil
+}
+
+func (client *EnodeAuthClient) saveAccessToken(tokenInfo *enodeOAuthResponse, key string) error {
+	err := client.redisClient.Set(context.Background(), key, tokenInfo.AccessToken, time.Duration(tokenInfo.ExpiresIn)*time.Second-10*time.Second).Err()
+	if err != nil {
+		slog.Error("Failed to save access token", "error", err)
+		return err
+	}
+
+	slog.Debug("Saving access token")
+	return nil
 }

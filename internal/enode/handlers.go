@@ -8,21 +8,21 @@ import (
 )
 
 type enodeAuthHandler struct {
-	AuthClient *enodeAuthClient
+	AuthClient *EnodeAuthClient
 }
 
-func NewEnodeAuthHandler(authClient *enodeAuthClient) *enodeAuthHandler {
+func NewEnodeAuthHandler(authClient *EnodeAuthClient) *enodeAuthHandler {
 	return &enodeAuthHandler{
 		AuthClient: authClient,
 	}
 }
 
 func (h *enodeAuthHandler) Authenticate(c echo.Context) error {
-	res, err := h.AuthClient.Authenticate(c)
+	res, err := h.AuthClient.authenticate()
 	if err != nil {
 		slog.Error("Failed to authenticate with Enode", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to authenticate with Enode")
 	}
-	slog.Info("Successfully authenticated with Enode", "access_token", res.AccessToken, "expires_in", res.ExpiresIn)
+	slog.Debug("Successfully authenticated with Enode")
 	return c.JSON(200, res)
 }
