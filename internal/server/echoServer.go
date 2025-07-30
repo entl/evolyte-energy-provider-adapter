@@ -17,17 +17,19 @@ import (
 )
 
 type echoServer struct {
-	echoApp *echo.Echo
-	conf    *config.Config
+	echoApp     *echo.Echo
+	conf        *config.Config
+	redisClient *redis.Client
 }
 
-func NewEchoServer(conf *config.Config) Server {
+func NewEchoServer(conf *config.Config, redisClient *redis.Client) Server {
 	echoApp := echo.New()
 	echoApp.Logger.SetLevel(echoLog.DEBUG)
 
 	return &echoServer{
-		echoApp: echoApp,
-		conf:    conf,
+		echoApp:     echoApp,
+		redisClient: redisClient,
+		conf:        conf,
 	}
 }
 
