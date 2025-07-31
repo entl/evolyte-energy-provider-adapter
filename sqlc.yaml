@@ -1,0 +1,24 @@
+version: "2"
+
+sql:
+  # General DB (schema + shared queries)
+  - engine: "postgresql"
+    schema: "./db_schema"
+    queries: "./queries"
+    gen:
+      go:
+        package: "db"
+        out: "internal/db"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+            nullable: true
+              

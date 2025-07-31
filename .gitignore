@@ -28,8 +28,11 @@ go.work.sum
 .env*
 
 # Editor/IDE
-# .idea/
+.idea/
 .vscode/
+.github/
 
 # air
 /tmp
+
+/db_schema/*
