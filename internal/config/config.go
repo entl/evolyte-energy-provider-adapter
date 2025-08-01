@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	Server Server
-	Enode  Enode
-	Redis  Redis
+	Server   Server
+	Enode    Enode
+	Redis    Redis
+	Postgres Postgres
 }
 
 type Server struct {
@@ -29,6 +30,14 @@ type Redis struct {
 	Port     string `env:"REDIS_PORT,required"`
 	Password string `env:"REDIS_PASSWORD,required"`
 	DB       int    `env:"REDIS_DB,required"`
+}
+
+type Postgres struct {
+	Host     string `env:"POSTGRES_HOST,required"`
+	Port     string `env:"POSTGRES_PORT,required"`
+	User     string `env:"POSTGRES_USER,required"`
+	Password string `env:"POSTGRES_PASSWORD,required"`
+	DB       string `env:"POSTGRES_DB,required"`
 }
 
 func LoadConfig(envFile string) (*Config, error) {
