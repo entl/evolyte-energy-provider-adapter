@@ -49,10 +49,6 @@ func (client *EnodeAuthClient) GetAccessToken() (string, error) {
 		slog.Debug("Access token found in Redis")
 		return token, nil
 	}
-	if err != nil {
-		slog.Error("Failed to get access token from Redis", "error", err)
-		return "", err
-	}
 
 	slog.Debug("Access token not found in Redis, authenticating with Enode")
 	tokenInfo, err := client.authenticate()
