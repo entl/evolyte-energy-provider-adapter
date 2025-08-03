@@ -1,37 +1,43 @@
 package inverters
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
+	"github.com/entl/evolyte-energy-provider-adapter/internal/db"
 	"github.com/entl/evolyte-energy-provider-adapter/internal/enode"
 )
 
 type SolarInverterClient interface {
-	ListInverters(bearbearerToken string, after string, before string, pageSize int) (*SolarInverterResponse, error)
-	ListUserInverters(bearerToken string, userID string, after string, before string, pageSize int) (*SolarInverterResponse, error)
-	GetInverter(bearerToken string, inverterID string) (*SolarInverter, error)
-	GetInverterProductionStatistics(bearerToken string, inverterID string, params InverterStatisticParams) (*InverterStatistic, error)
+	ListInverters(ctx context.Context, bearbearerToken string, after string, before string, pageSize int) (*SolarInverterResponse, error)
+	ListUserInverters(ctx context.Context, bearerToken string, userID string, after string, before string, pageSize int) (*SolarInverterResponse, error)
+	GetInverter(ctx context.Context, bearerToken string, inverterID string) (*SolarInverter, error)
+	GetInverterProductionStatistics(ctx context.Context, bearerToken string, inverterID string, params InverterStatisticParams) (*InverterStatistic, error)
+	LinkInverter(ctx context.Context, bearerToken string, userId string, linkBody LinkInverterRequest) (*LinkInverterResponse, error)
 }
 
 type EnodeSolarInverterClient struct {
 	enodeAuthClient *enode.EnodeAuthClient
 	enodeBaseURL    string
+	inverterQueries *db.Queries
 	httpClient      *http.Client
 }
 
-func NewEnodeSolarInverterClient(authClient *enode.EnodeAuthClient, baseURL string, httpClient *http.Client) *EnodeSolarInverterClient {
+func NewEnodeSolarInverterClient(authClient *enode.EnodeAuthClient, baseURL string, httpClient *http.Client, inverterQueries *db.Queries) *EnodeSolarInverterClient {
 	return &EnodeSolarInverterClient{
 		enodeAuthClient: authClient,
 		enodeBaseURL:    baseURL,
+		inverterQueries: inverterQueries,
 		httpClient:      httpClient,
 	}
 }
 
-func (client *EnodeSolarInverterClient) ListInverters(bearerToken string, after string, before string, pageSize int) (*SolarInverterResponse, error) {
+func (client *EnodeSolarInverterClient) ListInverters(ctx context.Context, bearerToken string, after string, before string, pageSize int) (*SolarInverterResponse, error) {
 	invertersBaseURL := client.enodeBaseURL + "/inverters"
 	token, err := client.enodeAuthClient.GetAccessToken()
 	if err != nil {
@@ -59,6 +65,10 @@ func (client *EnodeSolarInverterClient) ListInverters(bearerToken string, after 
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode != http.StatusOK {
+		return nil, parseEnodeError(response)
+	}
+
 	var solarInverterResponse SolarInverterResponse
 	if err := json.NewDecoder(response.Body).Decode(&solarInverterResponse); err != nil {
 		return nil, err
@@ -67,7 +77,7 @@ func (client *EnodeSolarInverterClient) ListInverters(bearerToken string, after 
 	return &solarInverterResponse, nil
 }
 
-func (client *EnodeSolarInverterClient) ListUserInverters(bearerToken string, userID string, after string, before string, pageSize int) (*SolarInverterResponse, error) {
+func (client *EnodeSolarInverterClient) ListUserInverters(ctx context.Context, bearerToken string, userID string, after string, before string, pageSize int) (*SolarInverterResponse, error) {
 	invertersBaseURL := fmt.Sprintf("%s/users/%s/inverters", client.enodeBaseURL, userID)
 	token, err := client.enodeAuthClient.GetAccessToken()
 	if err != nil {
@@ -113,7 +123,7 @@ func (client *EnodeSolarInverterClient) addPaginationParams(params *url.Values, 
 	return params
 }
 
-func (client *EnodeSolarInverterClient) GetInverter(bearerToken string, inverterID string) (*SolarInverter, error) {
+func (client *EnodeSolarInverterClient) GetInverter(ctx context.Context, bearerToken string, inverterID string) (*SolarInverter, error) {
 	inverterURL := fmt.Sprintf("%s/inverters/%s", client.enodeBaseURL, inverterID)
 	token, err := client.enodeAuthClient.GetAccessToken()
 	if err != nil {
@@ -133,7 +143,7 @@ func (client *EnodeSolarInverterClient) GetInverter(bearerToken string, inverter
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get inverter: %s", response.Status)
+		return nil, parseEnodeError(response)
 	}
 
 	var inverter SolarInverter
@@ -163,7 +173,7 @@ func (p InverterStatisticParams) Validate() error {
 	return nil
 }
 
-func (client *EnodeSolarInverterClient) GetInverterProductionStatistics(bearerToken string, inverterID string, inverterStatisticParams InverterStatisticParams) (*InverterStatistic, error) {
+func (client *EnodeSolarInverterClient) GetInverterProductionStatistics(ctx context.Context, bearerToken string, inverterID string, inverterStatisticParams InverterStatisticParams) (*InverterStatistic, error) {
 	inverterURL := fmt.Sprintf("%s/inverters/%s/statistics", client.enodeBaseURL, inverterID)
 	if err := inverterStatisticParams.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid inverter statistic parameters: %w", err)
@@ -188,10 +198,62 @@ func (client *EnodeSolarInverterClient) GetInverterProductionStatistics(bearerTo
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode != http.StatusOK {
+		return nil, parseEnodeError(response)
+	}
+
 	var inverterStatistic InverterStatistic
 	if err := json.NewDecoder(response.Body).Decode(&inverterStatistic); err != nil {
 		return nil, err
 	}
 
 	return &inverterStatistic, nil
+}
+
+func (client *EnodeSolarInverterClient) LinkInverter(ctx context.Context, bearerToken string, userId string, linkBody LinkInverterRequest) (*LinkInverterResponse, error) {
+	linkURL := fmt.Sprintf("%s/users/%s/link", client.enodeBaseURL, userId)
+	reqBody, err := json.Marshal(linkBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", linkURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", bearerToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	response, err := client.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, parseEnodeError(response)
+	}
+
+	var linkResponse LinkInverterResponse
+	if err := json.NewDecoder(response.Body).Decode(&linkResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &linkResponse, nil
+}
+
+func parseEnodeError(resp *http.Response) error {
+	defer resp.Body.Close()
+
+	var apiErr struct {
+		Type   string `json:"type"`
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+		return fmt.Errorf("request failed with status %s and unreadable error body: %w", resp.Status, err)
+	}
+
+	return fmt.Errorf("%s - %s", apiErr.Title, apiErr.Detail)
 }
