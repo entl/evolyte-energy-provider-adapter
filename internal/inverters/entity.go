@@ -9,17 +9,17 @@ type SolarInverterResponse struct {
 }
 
 type SolarInverter struct {
-	ID              string          `json:"id"`
-	UserID          string          `json:"userId"`
-	Vendor          string          `json:"vendor"`
-	LastSeen        time.Time       `json:"lastSeen"`
-	IsReachable     bool            `json:"isReachable"`
-	ProductionState ProductionState `json:"productionState"`
+	ID              string          `json:"id" validate:"required"`
+	UserID          string          `json:"userId" validate:"required"`
+	Vendor          string          `json:"vendor" validate:"required"`
+	LastSeen        time.Time       `json:"lastSeen" validate:"required"`
+	IsReachable     bool            `json:"isReachable" validate:"required"`
+	ProductionState ProductionState `json:"productionState" validate:"required"`
 	Timezone        string          `json:"timezone"`
-	Capabilities    Capabilities    `json:"capabilities"`
-	Scopes          []string        `json:"scopes"`
-	Information     Information     `json:"information"`
-	Location        Location        `json:"location"`
+	Capabilities    Capabilities    `json:"capabilities" validate:"required"`
+	Scopes          []string        `json:"scopes" validate:"required"`
+	Information     Information     `json:"information" validate:"required"`
+	Location        Location        `json:"location" validate:"required"`
 }
 
 // Current production state of the inverter
@@ -31,26 +31,26 @@ type ProductionState struct {
 }
 
 type Capabilities struct {
-	ProductionState      Capability `json:"productionState"`
-	ProductionStatistics Capability `json:"productionStatistics"`
+	ProductionState      Capability `json:"productionState" validate:"required"`
+	ProductionStatistics Capability `json:"productionStatistics" validate:"required"`
 }
 
 type Capability struct {
-	IsCapable       bool     `json:"isCapable"`
-	InterventionIDs []string `json:"interventionIds"`
+	IsCapable       bool     `json:"isCapable" validate:"required"`
+	InterventionIDs []string `json:"interventionIds" validate:"required"`
 }
 
 type Information struct {
-	ID               string    `json:"id"`
-	SerialNumber     string    `json:"sn"`
-	Brand            string    `json:"brand"`
-	Model            string    `json:"model"`
-	SiteName         string    `json:"siteName"`
-	InstallationDate time.Time `json:"installationDate"`
+	ID               string    `json:"id" validate:"required"`
+	SerialNumber     *string   `json:"sn"`
+	Brand            string    `json:"brand" validate:"required"`
+	Model            string    `json:"model" validate:"required"`
+	SiteName         string    `json:"siteName" validate:"required"`
+	InstallationDate time.Time `json:"installationDate" validate:"required"`
 }
 
 type Location struct {
-	ID          string    `json:"id"`
+	ID          string    `json:"id" validate:"omitempty, uuid"`
 	Longitude   float64   `json:"longitude"`
 	Latitude    float64   `json:"latitude"`
 	LastUpdated time.Time `json:"lastUpdated"`
@@ -63,18 +63,55 @@ type Pagination struct {
 
 // InverterStatistic represents production statistics for an inverter
 type InverterStatistic struct {
-	Timezone    string                `json:"timezone"`
-	Resolutions map[string]Resolution `json:"resolutions"`
-	RetryAfter  time.Time             `json:"retryAfter,omitempty"`
+	Timezone    string                `json:"timezone" validate:"required"`
+	Resolutions map[string]Resolution `json:"resolutions" validate:"required"`
+	RetryAfter  time.Time             `json:"retryAfter"`
 }
 
 // Resolution represents data for a specific time resolution (e.g., QUARTER_HOUR, DAY)
 type Resolution struct {
-	Unit string      `json:"unit"`
+	Unit string      `json:"unit" validate:"required"`
 	Data []DataPoint `json:"data"`
 }
 
 type DataPoint struct {
 	Date  time.Time `json:"date"`
 	Value float64   `json:"value"`
+}
+
+// LinkInverterRequest represents the request body for linking an inverter
+type LinkInverterRequest struct {
+	Scopes      []string `json:"scopes" validate:"required"`
+	Language    string   `json:"language" validate:"required"`
+	RedirectUri string   `json:"redirectUri" validate:"required"`
+}
+
+type LinkInverterResponse struct {
+	LinkURL   string `json:"linkUrl" validate:"required"`
+	LinkToken string `json:"linkToken" validate:"required"`
+}
+
+type AddInverterRequest struct {
+	UserID                  string    `json:"userId" validate:"required"`
+	Vendor                  string    `json:"vendor" validate:"required"`
+	Model                   string    `json:"model" validate:"required"`
+	SerialNumber            string    `json:"serialNumber" validate:"required"`
+	TotalLifetimeProduction float64   `json:"totalLifetimeProduction" validate:"required"`
+	InstallationDate        time.Time `json:"installationDate" validate:"required"`
+}
+
+type AddInverterResponse struct {
+	ID                      string    `json:"id" validate:"required"`
+	UserID                  string    `json:"userId" validate:"required"`
+	Vendor                  string    `json:"vendor" validate:"required"`
+	Model                   string    `json:"model" validate:"required"`
+	SerialNumber            string    `json:"serialNumber" validate:"required"`
+	TotalLifetimeProduction float64   `json:"totalLifetimeProduction" validate:"required"`
+	InstallationDate        time.Time `json:"installationDate" validate:"required"`
+}
+
+type EnodeErrorResponse struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	Details string `json:"details"`
 }
