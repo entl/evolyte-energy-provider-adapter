@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/entl/evolyte-energy-provider-adapter/internal/config"
+	"github.com/entl/evolyte-energy-provider-adapter/internal/db"
+	"github.com/entl/evolyte-energy-provider-adapter/internal/utils"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoLog "github.com/labstack/gommon/log"
@@ -17,34 +19,30 @@ import (
 )
 
 type echoServer struct {
-	echoApp     *echo.Echo
-	conf        *config.Config
-	redisClient *redis.Client
+	echoApp         *echo.Echo
+	redisClient     *redis.Client
+	inverterQueries *db.Queries
+	conf            *config.Config
+	validator       *utils.CustomValidator
 }
 
-func NewEchoServer(conf *config.Config, redisClient *redis.Client) Server {
+func NewEchoServer(conf *config.Config, redisClient *redis.Client, inverterQueries *db.Queries, validator *utils.CustomValidator) Server {
 	echoApp := echo.New()
 	echoApp.Logger.SetLevel(echoLog.DEBUG)
 
 	return &echoServer{
-		echoApp:     echoApp,
-		redisClient: redisClient,
-		conf:        conf,
+		echoApp:         echoApp,
+		redisClient:     redisClient,
+		inverterQueries: inverterQueries,
+		conf:            conf,
+		validator:       validator,
 	}
 }
 
 func (s *echoServer) Start() error {
 	s.echoApp.Use(middleware.Recover())
 	s.echoApp.Use(middleware.Logger())
-	client := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", s.conf.Redis.Host, s.conf.Redis.Port),
-		Password: s.conf.Redis.Password,
-		DB:       s.conf.Redis.DB,
-	})
-
-	if err := client.Ping(context.Background()).Err(); err != nil {
-		slog.Error("Failed to connect to Redis", "error", err)
-	}
+	s.echoApp.Validator = s.validator
 
 	go func() {
 		slog.Info("Starting Echo server", "port", s.conf.Server.Port)
